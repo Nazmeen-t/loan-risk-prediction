@@ -3,6 +3,30 @@ import streamlit as st
 import pandas as pd 
 import plotly.express as px
 
+USERNAME = "admin"
+PASSWORD = "1234"
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+def login():
+    st.title("🔐 Login Page")
+    user = st.text_input("Username")
+    pwd = st.text_input("Password", type="password")
+
+    if st.button("Login"):
+        if user == USERNAME and pwd == PASSWORD:
+            st.session_state.logged_in = True
+            st.success("Login successful")
+            st.rerun()
+        else:
+            st.error("Invalid credentials")
+
+# STOP app if not logged in
+if not st.session_state.logged_in:
+    login()
+    st.stop()
+
 # Load data
 df = pd.read_csv("loan_data.csv")
 def risk_group(x):
