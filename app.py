@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd 
 import plotly.express as px
 
+# ---------------- LOGIN SYSTEM ----------------
 USERNAME = "admin"
 PASSWORD = "1234"
 
@@ -26,18 +27,20 @@ def login():
 if not st.session_state.logged_in:
     login()
     st.stop()
-
+# ------------------------------------------------
 # Load data
 df = pd.read_csv("loan_data.csv")
 def risk_group(x):
     if x == 0:
         return "No Delinquency"
-    elif x <= 2:
-        return "Low (1-2)"
     elif x <= 5:
-        return "Medium (3-5)"
+        return "Low (1-5)"
+    elif x <= 15:
+        return "Medium (6-15)"
+    elif x <= 30:
+        return "High (16-30)"
     else:
-        return "High (5+)"
+        return "Very High (31+)"
 
 df['Delinquency_Group'] = df['num_times_delinquent'].apply(risk_group)
 
@@ -69,8 +72,14 @@ selected_risk = st.sidebar.multiselect(
 
 # Apply filters
 df_filtered = df[
-    (df['GENDER'].isin(selected_gender)) &
-    (df['Delinquency_Group'].isin(selected_risk))
+    (df['GENDER'].isin(['M','F'])) &
+    (df['Delinquency_Group'].isin([
+        "No Delinquency",
+        "Low (1-5)",
+        "Medium (6-15)",
+        "High (16-30)",
+        "Very High (31+)"
+    ]))
 ]
 
 #st.markdown("## Key Metrices")
@@ -87,8 +96,6 @@ rejection_rate = rejected / total
 avg_credit = df_filtered['Credit_Score'].mean()
 avg_income = df_filtered['NETMONTHLYINCOME'].mean()
 
-high_risk = df_filtered[df_filtered['Delinquency_Group'] == 'High (5+)'].shape[0]
-high_risk_pct = high_risk / total
 
 col1, col2, col3, col4 = st.columns(4)
 col5, col6 = st.columns(2)
@@ -99,8 +106,7 @@ col3.metric("Rejection Rate", f"{rejection_rate:.2%}")
 col4.metric("Avg Credit Score", f"{avg_credit:.0f}")
 
 col5.metric("Avg Income", f"{avg_income:,.0f}")
-col6.metric("High Risk %", f"{high_risk_pct:.2%}")
-
+#col6.metric("High Risk %", f"{high_risk_pct:.2%}")
 # Charts row 1
 col1, col2 = st.columns([1.2,1])
 
@@ -108,7 +114,13 @@ col1, col2 = st.columns([1.2,1])
 with col1:
     st.subheader("Customer Distribution by Risk")
 
-    risk_order = ["No Delinquency", "Low (1-2)", "Medium (3-5)", "High (5+)"]
+    risk_order = [
+    "No Delinquency",
+    "Low (1-5)",
+    "Medium (6-15)",
+    "High (16-30)",
+    "Very High (31+)"
+]
 
     risk_counts = (
         df_filtered['Delinquency_Group']
@@ -125,10 +137,12 @@ with col1:
     y='Count',
     color='Risk Level',
     color_discrete_map={
-        "No Delinquency": "#27AE60",   # Green
-        "Low (1-2)": "#3498DB",        # Blue
-        "Medium (3-5)": "#F39C12",     # Orange
-        "High (5+)": "#E74C3C"         # Red
+    "No Delinquency": "#2ECC71",
+    "Low (1-5)": "#3498DB",
+    "Medium (6-15)": "#F39C12",
+    "High (16-30)": "#E74C3C",
+    "Very High (31+)": "#8E44AD"
+
     },
     category_orders={"Risk Level": risk_order}
 )
@@ -140,36 +154,52 @@ with col1:
 
 # RIGHT SIDE 
 with col2:
-    st.subheader("Approval Status Distribution")
+    st.subheader("Impact of Delinquency on Loan Approval")
 
-    approval_order = ['P1', 'P2', 'P3', 'P4']
+    # DEBUG (keep this once to confirm)
+    st.write("Filtered shape:", df_filtered.shape)
 
-    approval_counts = (
-        df_filtered['Approved_Flag']
-        .value_counts()
-        .reindex(approval_order, fill_value=0)
-        .reset_index()
+    # Group data
+    delinq_approval = (
+        df_filtered
+        .groupby(['Delinquency_Group', 'Approved_Flag'])
+        .size()
+        .reset_index(name='Count')
     )
 
-    approval_counts.columns = ['Status', 'Count']
+    # DEBUG 
+    #st.write(delinq_approval)
 
-    fig2 = px.bar(
-    approval_counts,
-    x='Status',
-    y='Count',
-    color='Status',
-    color_discrete_map={
-        "P1": "#2ECC71",
-        "P2": "#3498DB",
-        "P3": "#F39C12",
-        "P4": "#E74C3C"
-    },
-    category_orders={"Status": approval_order}
-)
+    # Check empty
+    if delinq_approval.empty:
+        st.error("No data available — check your filters ❌")
+    else:
+        fig2 = px.bar(
+            delinq_approval,
+            x='Delinquency_Group',
+            y='Count',
+            color='Approved_Flag',
+            barmode='group',
+            category_orders={
+                "Delinquency_Group": [
+                    "No Delinquency",
+                    "Low (1-5)",
+                    "Medium (6-15)",
+                    "High (16-30)",
+                    "Very High (31+)"
+                ]
+            },
+            color_discrete_map={
+                "P1": "#2ECC71",
+                "P2": "#3498DB",
+                "P3": "#F39C12",
+                "P4": "#E74C3C"
+            }
+        )
 
-    fig2.update_traces(width=0.6)
+        st.plotly_chart(fig2, use_container_width=True)
+    
 
-    st.plotly_chart(fig2, use_container_width=True)
 
 #charts row2
 
